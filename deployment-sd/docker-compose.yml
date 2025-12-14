@@ -1,0 +1,375 @@
+version: '3.9'
+
+services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    volumes:
+      - ./nginx/html:/usr/share/nginx/html:ro
+    networks:
+      - proxy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy-network"
+      - "traefik.http.routers.nginx.rule=Host(`localhost`) && PathPrefix(`/`) && !PathPrefix(`/api`)"
+      - "traefik.http.routers.nginx.entrypoints=web"
+      - "traefik.http.services.nginx.loadbalancer.server.port=80"
+      - "traefik.http.routers.nginx.priority=1"
+
+  #  ----- USER -----
+  user-db:
+    image: postgres:15
+    container_name: user-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: user_db
+    volumes:
+      - ./db-data/user-postgres:/var/lib/postgresql/data
+      - ./db-init/user:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user -d user_db" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - proxy-network
+    restart: always
+
+  #  ----- DEVICE -----
+  device-db:
+    image: postgres:15
+    container_name: device-db
+    environment:
+      POSTGRES_USER: device
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: device_db
+    volumes:
+      - ./db-data/device-postgres:/var/lib/postgresql/data
+      - ./db-init/device:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U device -d device_db" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - proxy-network
+    restart: always
+
+  # -------- USER (Spring) --------
+  user-service:
+    build:
+      context: ../user_backend
+      args:
+        POM_DIR: demo
+    container_name: user-service
+    depends_on:
+      user-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - DB_IP=user-db
+      - DB_USER=user
+      - DB_PASSWORD=password
+      - DB_DBNAME=user_db
+      - DB_PORT=5432
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - sync.queue.name=sync.events
+    ports:
+      - "8082:8080"
+    networks:
+      - proxy-network
+    labels:
+      - "traefik.enable=false"
+    restart: unless-stopped
+
+  # -------- DEVICE (Spring) --------
+  device-service:
+    build:
+      context: ../device_backend
+      args:
+        POM_DIR: demo
+    container_name: device-service
+    depends_on:
+      device-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - DB_IP=device-db
+      - DB_PORT=5432
+      - DB_USER=device
+      - DB_PASSWORD=password
+      - DB_DBNAME=device_db
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - sync.queue.name=sync.events
+    ports:
+      - "8083:8080"
+    networks:
+      - proxy-network
+    labels:
+      - "traefik.enable=false"
+    restart: unless-stopped
+
+  #  ------------ AUTH -------------
+  auth-db:
+    image: postgres:15
+    container_name: auth-db
+    environment:
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: auth_db
+    volumes:
+      - ./db-data/auth-postgres:/var/lib/postgresql/data
+      - ./db-init/auth:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U auth -d auth_db" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - proxy-network
+    restart: always
+
+  auth-service:
+    build:
+      context: ../auth_service
+    container_name: auth-service
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - DB_IP=auth-db
+      - DB_PORT=5432
+      - DB_USER=auth
+      - DB_PASSWORD=password
+      - DB_DBNAME=auth_db
+      - JWT_SECRET=supersecret_key_that_must_be_at_least_256_bits_long_for_HS256_algorithm
+      - JWT_EXPIRES_MINUTES=60
+      - PORT=8080
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8080/api/auth/health" ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "8081:8080"
+    networks: [ proxy-network ]
+    labels:
+      - "traefik.enable=false"
+    restart: unless-stopped
+
+  # ---------- GATEWAY ------------
+  gateway:
+    build:
+      context: ../spring-demo
+    container_name: gateway
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      device-service:
+        condition: service_started
+      monitoring-service-1:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - JWT_SECRET=supersecret_key_that_must_be_at_least_256_bits_long_for_HS256_algorithm
+      - PORT=8080
+      - auth.service.url=http://auth-service:8080
+      - user.service.url=http://user-service:8080
+      - device.service.url=http://device-service:8080
+      - monitoring.service.url=http://monitoring-service:8080
+    expose:
+      - "8080"
+    networks:
+      - proxy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy-network"
+      - "traefik.http.routers.gateway.rule=Host(`localhost`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.gateway.entrypoints=web"
+      - "traefik.http.routers.gateway.priority=300"
+      - "traefik.http.services.gateway.loadbalancer.server.port=8080"
+      - "traefik.http.routers.gateway.service=gateway"
+    restart: unless-stopped
+
+  # ------------ TRAEFIK -----------------
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: always
+    ports:
+      - "80:80"       # HTTP port
+      - "8080:8080"   # Dashboard port
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./traefik.yml:/etc/traefik/traefik.yml:ro"
+      - "./dynamic:/etc/traefik/dynamic:ro"
+      - "./logs:/var/log/traefik"
+    networks:
+      - proxy-network
+
+    # ---------- RabbitMQ -----------------
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 20s
+      timeout: 30s
+      retries: 5
+      start_period: 60s
+    networks:
+      - proxy-network
+    restart: unless-stopped
+
+  # --------------- Monitoring db --------------
+  monitoring-db:
+    image: postgres:15
+    container_name: monitoring-db
+    environment:
+      POSTGRES_DB: monitoring
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d monitoring" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - monitoring-data:/var/lib/postgresql/data
+    networks:
+      - proxy-network
+    restart: always
+
+  # --------------- LOAD BALANCER ---------------
+  load-balancer:
+    build:
+      context: ../load_balancer
+    container_name: load-balancer
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SERVER_PORT=8080
+    networks:
+      - proxy-network
+    restart: unless-stopped
+
+  # --------------- Monitoring REPLICA 1 ---------------
+  monitoring-service-1:
+    build:
+      context: ../monitoring_service
+    container_name: monitoring-service-1
+    depends_on:
+      monitoring-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - DB_IP=monitoring-db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - DB_DBNAME=monitoring
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - monitoring.queue.name=monitoring_q_1
+      - notification.queue.name=notification.queue
+      - PORT=8080
+    networks:
+      proxy-network:
+        aliases:
+          - monitoring-service
+    labels:
+      - "traefik.enable=false"
+    restart: unless-stopped
+
+  # --------------- Monitoring REPLICA 2 ---------------
+  monitoring-service-2:
+    build:
+      context: ../monitoring_service
+    container_name: monitoring-service-2
+    depends_on:
+      monitoring-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - DB_IP=monitoring-db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - DB_DBNAME=monitoring
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - monitoring.queue.name=monitoring_q_2
+      - notification.queue.name=notification.queue
+      - PORT=8080
+    networks:
+      proxy-network:
+        aliases:
+          - monitoring-service
+    labels:
+      - "traefik.enable=false"
+    restart: unless-stopped
+
+  # --------------- Device Simulator(producer) ---------------
+  device-simulator:
+    build:
+      context: ../device_simulator
+    container_name: device-simulator
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - MEASUREMENTS_QUEUE_NAME=device.measurements
+      - SIMULATOR_DEVICE_ID=14edcfba-9234-4975-a804-dd980c2ab0b1
+      - SIMULATOR_INTERVAL_MILLIS=5000
+    networks:
+      - proxy-network
+    restart: unless-stopped
+
+  # ------------ Communication/websocket ------------
+  communication-service:
+    build:
+      context: ../communication_service
+    container_name: communication-service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - notification.queue.name=notification.queue
+      - PORT=8080
+      - google.ai.key=${GOOGLE_AI_KEY}
+    networks:
+      - proxy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy-network"
+      - "traefik.http.routers.comm.rule=Host(`localhost`) && PathPrefix(`/ws`)"
+      - "traefik.http.routers.comm.entrypoints=web"
+      - "traefik.http.services.comm.loadbalancer.server.port=8080"
+    restart: unless-stopped
+
+# Define a shared network for all services
+networks:
+  proxy-network:
+    name: proxy-network
+    driver: bridge
+volumes:
+  monitoring-data:

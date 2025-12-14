@@ -1,0 +1,59 @@
+http:
+  # Define URL routing rules, middlewares, and services
+  routers:
+    nginx-frontend:
+      rule: "Host(`localhost`)" # Match requests to localhost without /api prefix
+      entryPoints:
+        - web # Listen on the web (HTTP) entry point
+      service: nginx # Forward to the nginx service
+
+
+    user-api:
+      rule: "Host(`localhost`) && PathPrefix(`/api/user`)"
+      entryPoints:
+        - web
+      middlewares:
+        - auth-basic
+        - strip-user-prefix
+      service: user-service
+
+
+    device-api:
+      rule: "Host(`localhost`) && PathPrefix(`/api/device`)" # Match requests to localhost with /api prefix
+      entryPoints:
+        - web # Listen on the web (HTTP) entry point
+      middlewares:
+        - auth-basic # Apply basic auth middleware
+        - strip-device-prefix # Remove /api prefix before forwarding
+      service: device-service
+
+  middlewares:
+    strip-user-prefix: # Middleware to remove /api prefix
+      stripPrefix: 
+        prefixes:
+          - "/api/user"
+    strip-device-prefix:
+      stripPrefix:
+        prefixes:
+          - "/api/device"
+
+    auth-basic: # Middleware for basic authentication
+      basicAuth:
+        users:
+          - "user:$apr1$H6uskkkW$IgXLP6ewTrSuBkTrqE8wj/" # password = "test"
+
+  services:
+    nginx: 
+      loadBalancer:
+        servers:
+          - url: "http://nginx:80" # Container name solved by Docker DNS
+
+    user-service:
+      loadBalancer:
+        servers:
+          - url: "http://user-backend:5000" # Container name solved by Docker DNS
+
+    device-service:
+      loadBalancer:
+        servers:
+          - url: "http://device-backend:5000"
