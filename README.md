@@ -1,113 +1,55 @@
-Energy Management System (EMS) - Distributed Microservices Architecture
-Overview
-Acest proiect reprezintă un sistem complex de gestionare și monitorizare a consumului de energie, construit pe o arhitectură de microservicii scalabilă. Sistemul permite monitorizarea în timp real a dispozitivelor IoT, procesarea asincronă a datelor masive prin mecanisme de Load Balancing și oferă suport interactiv utilizatorilor prin tehnologii WebSockets și AI Generativ.
-+2
+# Energy Management System (EMS) - Distributed Microservices
 
-Core Features
-1. Distributed Data Ingestion & Load Balancing
-Sistemul este proiectat pentru a gestiona volume mari de date provenite de la senzori printr-un pipeline de ingestie scalabil:
+## Overview
+[cite_start]Acest proiect reprezintă o soluție completă de gestionare a energiei, dezvoltată pe o arhitectură de **microservicii distribuite**[cite: 20]. [cite_start]Sistemul permite monitorizarea în timp real a consumului, procesarea asincronă a datelor IoT și suport inteligent pentru clienți prin AI[cite: 137, 244, 264].
 
+---
 
-Custom Load Balancer: Un serviciu dedicat care consumă datele din coada centrală RabbitMQ (device.measurements) și distribuie sarcina folosind un algoritm Round-Robin către multiple replici de monitorizare.
-+1
+## System Architecture
+[cite_start]Sistemul este construit folosind principii de **loose coupling** și este complet containerizat folosind **Docker**[cite: 20, 28].
 
+| Componentă | Tehnologie | Responsabilitate |
+| :--- | :--- | :--- |
+| **Frontend** | React.js | [cite_start]Interfață role-based (Admin/Client) și grafice de consum [cite: 22, 63, 193] |
+| **API Gateway** | Traefik | [cite_start]Reverse proxy, autentificare JWT și rutare [cite: 51, 63, 291] |
+| **User Microservice** | Spring Boot | [cite_start]Managementul conturilor și securitate [cite: 59, 63] |
+| **Device Microservice** | Spring Boot | [cite_start]Gestiunea senzorilor și asocierea lor cu utilizatorii [cite: 61, 63] |
+| **Monitoring Service** | Spring Boot | [cite_start]Calculul consumului orar și alerte de depășire [cite: 143, 168] |
+| **Chat Service** | WebSockets/AI | [cite_start]Suport clienți hibrid (Reguli + Gemini AI) [cite: 247, 264] |
+| **Message Broker** | RabbitMQ | [cite_start]Comunicare asincronă și sincronizarea datelor [cite: 142, 165] |
 
-Horizontal Scaling: Suportă rularea simultană a multiple instanțe de Monitoring & Communication Microservice, fiecare având propria coadă de ingestie (monitoring_q_n).
-+1
+---
 
-2. Real-Time Communication & Notifications
+## Key Technical Features
 
-WebSockets (STOMP): Asigură un canal de comunicare persistent pentru livrarea instantanee a alertelor de supraconsum către platforma de vizualizare.
-+1
+### 1. Data Ingestion & Load Balancing
+[cite_start]Sistemul procesează date de la un simulator de senzori care generează măsurători la intervale de 10 minute[cite: 140, 155]:
+- [cite_start]**Scalabilitate Orizontală**: Utilizarea **Docker Swarm** pentru a rula replici multiple ale serviciului de monitorizare[cite: 292].
+- [cite_start]**Load Balancer**: Un serviciu personalizat distribuie mesajele din coada RabbitMQ către replicile disponibile folosind strategii de tip Round-Robin[cite: 287].
 
+### 2. Event-Driven Synchronization
+- [cite_start]Orice modificare în User sau Device Microservice este propagată asincron prin RabbitMQ către celelalte servicii pentru a asigura consistența datelor fără cuplaj direct[cite: 144, 145].
 
-Overconsumption Alerts: Monitorizarea în timp real detectează depășirea pragurilor de consum și notifică imediat utilizatorul prin mesaje de tip "Toast" în frontend.
-+1
+### 3. Real-Time Interactions
+- [cite_start]**WebSockets (STOMP)**: Notificări instantanee de tip "push" către client atunci când consumul depășește pragul maxim setat[cite: 267, 314].
+- [cite_start]**AI Support**: Integrare cu **Google Gemini 1.5 Flash** pentru a oferi răspunsuri automate la întrebările complexe ale utilizatorilor[cite: 264, 291].
 
-3. AI-Driven Customer Support
-Sistemul integrează un centru de suport inteligent pentru clienți:
+---
 
+## Evaluation Scenarios
+1. [cite_start]**Monitorizare Consum**: Vizualizarea istoricului zilnic sub formă de grafice (kWh/h)[cite: 193].
+2. [cite_start]**Sincronizare**: Adăugarea unui utilizator nou și verificarea propagării automate în baza de date a dispozitivelor[cite: 146, 147].
+3. [cite_start]**Chat Inteligent**: Testarea logicii de chat (Cuvinte cheie vs. AI Generativ)[cite: 259, 261, 264].
 
-Hybrid Chat System: Combină un motor bazat pe reguli (pentru întrebări frecvente) cu un model de limbaj avansat (Google Gemini 1.5 Flash) pentru răspunsuri contextuale complexe.
-+1
+---
 
+## Deployment & Requirements
+- [cite_start]**Mandatory**: Docker & Docker Compose / Docker Swarm[cite: 64, 292].
+- [cite_start]**Environment**: Necesită o cheie API Google Gemini pentru modulul de suport AI[cite: 264, 291].
 
-Admin-Client Interaction: Permite intervenția manuală a administratorilor în sesiunile de chat active.
-+1
+```bash
+# Clone the repository
+git clone [https://github.com/AlinaaZaharia/energy-management-system.git](https://github.com/AlinaaZaharia/energy-management-system.git)
 
-
-Typing Indicator: Feedback vizual în timp real pentru îmbunătățirea experienței utilizatorului.
-
-System Architecture
-Microservices
-
-User Management: Gestionează identitățile și rolurile utilizatorilor (Admin/Client).
-
-
-Device Management: Administrează inventarul dispozitivelor smart și asocierea acestora cu utilizatorii.
-
-
-Monitoring & Communication: Procesează fluxurile de date, calculează totalurile orare și emite notificări.
-+1
-
-
-Communication Service: Gestionează transportul mesajelor chat și al notificărilor WebSockets.
-+1
-
-
-API Gateway (Traefik): Punct unic de intrare care asigură rutarea, autentificarea (JWT) și securizarea cererilor.
-+2
-
-Data Pipeline & Synchronization
-
-Message Broker (RabbitMQ): Decuplează microserviciile și asigură sincronizarea datelor (Users/Devices) între baze de date diferite pentru a menține consistența.
-+2
-
-Tech Stack
-Backend: Java Spring Boot (Microservices)
-
-Frontend: React.js, SockJS, STOMP
-
-Messaging: RabbitMQ
-
-AI: Google Gemini API
-
-
-Infrastructure: Docker, Docker Swarm (pentru replicare și load balancing) 
-+1
-
-Reverse Proxy: Traefik
-
-
-Databases: PostgreSQL / MySQL (per-service database pattern) 
-
-Getting Started
-Prerequisites
-Docker & Docker Compose
-
-Google Gemini API Key
-
-Installation & Deployment
-Clone the repository:
-
-Bash
-
-git clone https://github.com/AlinaaZaharia/energy-management-system.git
-Build the Frontend:
-
-Bash
-
-cd frontend-app && npm install && npm run build
-Deploy with Docker:
-
-Bash
-
+# Build & Run with Docker
 docker-compose up -d --build
-Evaluation Scenarios
-
-Load Balancing: Monitorizarea log-urilor serviciilor de monitorizare (monitoring-service-1, monitoring-service-2) pentru a observa distribuția alternativă a mesajelor primite de la simulator.
-
-Chat Support: Testarea fluxului de la Rule-based la AI prin trimiterea de mesaje generale, respectiv tehnice.
-
-
-Real-Time Alerts: Simularea unui consum ridicat (peste limita dispozitivului) pentru a declanșa notificarea WebSocket în interfața clientului.
