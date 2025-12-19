@@ -1,51 +1,51 @@
 # Energy Management System (EMS) - Distributed Microservices
 
 ## Overview
-Acest proiect reprezintă o soluție completă de gestionare a energiei, dezvoltată pe o arhitectură de **microservicii distribuite**. Sistemul permite monitorizarea în timp real a consumului, procesarea asincronă a datelor IoT și suport inteligent pentru clienți prin AI.
+This project is a comprehensive energy management solution developed using a **distributed microservices architecture**. The system enables real-time consumption monitoring, asynchronous processing of IoT sensor data, and intelligent customer support through AI integration.
 
 ---
 
 ## System Architecture
-Sistemul este construit folosind principii de **loose coupling** și este complet containerizat folosind **Docker**.
+The system is built on **loose coupling** principles and is fully containerized using **Docker**.
 
-| Componentă | Tehnologie | Responsabilitate |
+| Component | Technology | Responsibility |
 | :--- | :--- | :--- |
-| **Frontend** | React.js | Interfață role-based (Admin/Client) și grafice de consum  |
-| **API Gateway** | Traefik | Reverse proxy, autentificare JWT și rutare  |
-| **User Microservice** | Spring Boot | Managementul conturilor și securitate  |
-| **Device Microservice** | Spring Boot | Gestiunea senzorilor și asocierea lor cu utilizatorii  |
-| **Monitoring Service** | Spring Boot | Calculul consumului orar și alerte de depășire  |
-| **Chat Service** | WebSockets/AI | Suport clienți hibrid (Reguli + Gemini AI)  |
-| **Message Broker** | RabbitMQ | Comunicare asincronă și sincronizarea datelor  |
+| **Frontend** | React.js | Role-based interface (Admin/Client) and consumption charts |
+| **API Gateway** | Traefik | Reverse proxy, JWT validation, and request routing |
+| **User Microservice** | Spring Boot | Account management and data persistence |
+| **Device Microservice** | Spring Boot | Sensor management and user-device mapping |
+| **Monitoring Service** | Spring Boot | Hourly consumption calculation and overconsumption alerts |
+| **Chat Service** | WebSockets/AI | Hybrid support system (Rule-based + Gemini AI) |
+| **Message Broker** | RabbitMQ | Asynchronous communication and data synchronization |
 
 ---
 
 ## Key Technical Features
 
 ### 1. Data Ingestion & Load Balancing
-Sistemul procesează date de la un simulator de senzori care generează măsurători la intervale de 10 minute:
-- **Scalabilitate Orizontală**: Utilizarea **Docker Swarm** pentru a rula replici multiple ale serviciului de monitorizare.
-- **Load Balancer**: Un serviciu personalizat distribuie mesajele din coada RabbitMQ către replicile disponibile folosind strategii de tip Round-Robin.
+The system processes data from a sensor simulator that generates measurements at 10-minute intervals:
+- **Horizontal Scalability**: Utilizes **Docker Swarm** to run multiple replicas of the monitoring service.
+- **Load Balancer**: A custom service distributes messages from the RabbitMQ central queue to available replicas using **Round-Robin** strategies.
 
 ### 2. Event-Driven Synchronization
-- Orice modificare în User sau Device Microservice este propagată asincron prin RabbitMQ către celelalte servicii pentru a asigura consistența datelor fără cuplaj direct.
+- Any changes in the User or Device microservices are propagated asynchronously via RabbitMQ to ensure data consistency across the system without direct coupling.
 
 ### 3. Real-Time Interactions
-- **WebSockets (STOMP)**: Notificări instantanee de tip "push" către client atunci când consumul depășește pragul maxim setat.
-- **AI Support**: Integrare cu **Google Gemini 1.5 Flash** pentru a oferi răspunsuri automate la întrebările complexe ale utilizatorilor.
+- **WebSockets (STOMP)**: Delivers instant "push" notifications to the client when energy consumption exceeds the configured maximum threshold.
+- **AI Support**: Integrated with **Google Gemini 1.5 Flash** to provide automated responses to complex user inquiries when no predefined rules are matched.
 
 ---
 
 ## Evaluation Scenarios
-1. **Monitorizare Consum**: Vizualizarea istoricului zilnic sub formă de grafice (kWh/h).
-2. **Sincronizare**: Adăugarea unui utilizator nou și verificarea propagării automate în baza de date a dispozitivelor.
-3. **Chat Inteligent**: Testarea logicii de chat (Cuvinte cheie vs. AI Generativ).
+1. **Consumption Monitoring**: View daily history through line or bar charts (kWh/h).
+2. **Synchronization**: Adding a new user/device and verifying automatic propagation to associated service databases.
+3. **Intelligent Chat**: Testing the support logic (Keyword matching vs. Generative AI).
 
 ---
 
 ## Deployment & Requirements
 - **Mandatory**: Docker & Docker Compose / Docker Swarm.
-- **Environment**: Necesită o cheie API Google Gemini pentru modulul de suport AI.
+- **Environment**: Requires a Google Gemini API Key for the AI support module.
 
 ```bash
 # Clone the repository
