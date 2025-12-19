@@ -1,163 +1,113 @@
-# Sistem de Management Energetic – Sisteme Distribuite Tema 3
+Energy Management System (EMS) - Distributed Microservices Architecture
+Overview
+Acest proiect reprezintă un sistem complex de gestionare și monitorizare a consumului de energie, construit pe o arhitectură de microservicii scalabilă. Sistemul permite monitorizarea în timp real a dispozitivelor IoT, procesarea asincronă a datelor masive prin mecanisme de Load Balancing și oferă suport interactiv utilizatorilor prin tehnologii WebSockets și AI Generativ.
++2
 
-## Comunicare Real-Time si Scalabilitate
+Core Features
+1. Distributed Data Ingestion & Load Balancing
+Sistemul este proiectat pentru a gestiona volume mari de date provenite de la senzori printr-un pipeline de ingestie scalabil:
 
-### Prezentare Generala
 
-Aceasta tema extinde sistemul realizat in etapele anterioare prin adaugarea de capabilitati de comunicare in timp real si scalabilitate orizontala. Sistemul integreaza acum un modul de Chat inteligent (bazat pe reguli si AI), notificari push prin WebSockets si un mecanism de Load Balancing pentru procesarea datelor provenite de la senzorii IoT.
+Custom Load Balancer: Un serviciu dedicat care consumă datele din coada centrală RabbitMQ (device.measurements) și distribuie sarcina folosind un algoritm Round-Robin către multiple replici de monitorizare.
++1
 
-Arhitectura a fost imbunatatita pentru a suporta un flux mare de date prin distribuirea incarcarii catre multiple instante ale serviciului de monitorizare.
 
----
+Horizontal Scaling: Suportă rularea simultană a multiple instanțe de Monitoring & Communication Microservice, fiecare având propria coadă de ingestie (monitoring_q_n).
++1
 
-## Arhitectura
+2. Real-Time Communication & Notifications
 
-### Componente Noi si Actualizate
+WebSockets (STOMP): Asigură un canal de comunicare persistent pentru livrarea instantanee a alertelor de supraconsum către platforma de vizualizare.
++1
 
-- **Communication Service**: Microserviciu nou dedicat chat-ului si notificarilor (WebSocket).
-- **Load Balancer Service**: Microserviciu nou care distribuie traficul de la simulator catre replicile de monitorizare.
-- **Monitoring Service (Replica 1 & 2)**: Serviciul de monitorizare a fost duplicat pentru a demonstra scalabilitatea.
-- **AI Integration**: Integrare cu Google Gemini 1.5 Flash pentru suport automatizat in chat.
-- **Frontend**: Extins cu componente de Chat (SockJS/STOMP) si notificari "toast".
 
-### Fluxuri de Date
+Overconsumption Alerts: Monitorizarea în timp real detectează depășirea pragurilor de consum și notifică imediat utilizatorul prin mesaje de tip "Toast" în frontend.
++1
 
-1. **IoT Data Pipeline**: Simulator -> Load Balancer -> Cozi Dedicate (Round Robin) -> Monitoring Replicas -> DB.
-2. **Real-Time Notification**: Monitoring Service -> RabbitMQ -> Communication Service -> WebSocket -> Client Frontend.
-3. **Chat System**: Client -> WebSocket -> Communication Service -> (Reguli / AI / Admin) -> Client.
+3. AI-Driven Customer Support
+Sistemul integrează un centru de suport inteligent pentru clienți:
 
-### Tehnologii Adaugate
 
-- **Real-time**: WebSockets, SockJS, STOMP
-- **AI**: Google Gemini API (model `gemini-1.5-flash`)
-- **Load Balancing**: Custom Application-Level Balancer (Spring Boot)
-- **Scalare**: Docker Compose (servicii replicate)
+Hybrid Chat System: Combină un motor bazat pe reguli (pentru întrebări frecvente) cu un model de limbaj avansat (Google Gemini 1.5 Flash) pentru răspunsuri contextuale complexe.
++1
 
----
 
-## Cerinte
+Admin-Client Interaction: Permite intervenția manuală a administratorilor în sesiunile de chat active.
++1
 
-- Docker 24.x
-- Docker Compose 2.x
-- Git
-- Cheie API Google Gemini (configurabila in env)
 
----
+Typing Indicator: Feedback vizual în timp real pentru îmbunătățirea experienței utilizatorului.
 
-## Instructiuni Build si Rulare
+System Architecture
+Microservices
 
-### 1. Clone repository
+User Management: Gestionează identitățile și rolurile utilizatorilor (Admin/Client).
 
-git clone repository-url
-cd DS2025_Grupa_Nume_Prenume_Assignment_3
 
-### 2. Build frontend
+Device Management: Administrează inventarul dispozitivelor smart și asocierea acestora cu utilizatorii.
 
-cd sd-frontend
-npm install
-npm run build
 
-### 3. Copiere build in nginx
+Monitoring & Communication: Procesează fluxurile de date, calculează totalurile orare și emite notificări.
++1
 
-Windows
-Copy-Item -Recurse -Force dist\* ..\deployment-sd\nginx\html\
 
-Linux / Mac
-cp -r dist/* ../deployment-sd/nginx/html/
+Communication Service: Gestionează transportul mesajelor chat și al notificărilor WebSockets.
++1
 
-### 4. Pornire servicii
 
-cd ../deployment-sd
-docker-compose down
+API Gateway (Traefik): Punct unic de intrare care asigură rutarea, autentificarea (JWT) și securizarea cererilor.
++2
+
+Data Pipeline & Synchronization
+
+Message Broker (RabbitMQ): Decuplează microserviciile și asigură sincronizarea datelor (Users/Devices) între baze de date diferite pentru a menține consistența.
++2
+
+Tech Stack
+Backend: Java Spring Boot (Microservices)
+
+Frontend: React.js, SockJS, STOMP
+
+Messaging: RabbitMQ
+
+AI: Google Gemini API
+
+
+Infrastructure: Docker, Docker Swarm (pentru replicare și load balancing) 
++1
+
+Reverse Proxy: Traefik
+
+
+Databases: PostgreSQL / MySQL (per-service database pattern) 
+
+Getting Started
+Prerequisites
+Docker & Docker Compose
+
+Google Gemini API Key
+
+Installation & Deployment
+Clone the repository:
+
+Bash
+
+git clone https://github.com/AlinaaZaharia/energy-management-system.git
+Build the Frontend:
+
+Bash
+
+cd frontend-app && npm install && npm run build
+Deploy with Docker:
+
+Bash
+
 docker-compose up -d --build
+Evaluation Scenarios
 
-### 5. Verificare rulare
+Load Balancing: Monitorizarea log-urilor serviciilor de monitorizare (monitoring-service-1, monitoring-service-2) pentru a observa distribuția alternativă a mesajelor primite de la simulator.
 
-docker ps
-# Ar trebui sa vezi load-balancer, monitoring-service-1, monitoring-service-2, communication-service etc.
+Chat Support: Testarea fluxului de la Rule-based la AI prin trimiterea de mesaje generale, respectiv tehnice.
 
----
 
-## Functionalitati Noi
-
-### 1. Load Balancing si Scalabilitate
-Sistemul asigura procesarea paralela a masuratorilor:
-- **Load Balancer**: Primeste toate mesajele din coada `device.measurements`.
-- **Distributie**: Aplica un algoritm Round-Robin pentru a trimite mesajele alternativ catre `monitoring_q_1` si `monitoring_q_2`.
-- **Replicare**: Doua instante de Monitoring Service ruleaza simultan, fiecare ascultand pe coada sa dedicata, dar scriind in aceeasi baza de date.
-
-### 2. Chat Suport Client
-Interfata de chat disponibila pentru utilizatorii logati, cu 3 niveluri de raspuns:
-- **Nivel 1 (Reguli)**: Raspunsuri instantanee pentru cuvinte cheie (ex: "bill", "consumption", "hello").
-- **Nivel 2 (AI)**: Daca nu exista o regula, mesajul este procesat de Google Gemini API pentru a oferi un raspuns contextual.
-- **Nivel 3 (Admin)**: Administratorul poate vedea conversatiile active si poate interveni manual. Mesajele adminului au prioritate.
-
-### 3. Notificari in Timp Real
-- Daca un dispozitiv depaseste limita de consum orar configurata, serviciul de monitorizare emite un eveniment.
-- Utilizatorul primeste instant o notificare "Toast" (fereastra rosie) in interfata web, fara a fi nevoie de refresh (via WebSocket).
-
-### 4. Chat Typing Indicator
-- Administratorul poate vedea in timp real cand un utilizator scrie un mesaj ("user is typing...").
-
----
-
-## Configurare Variabile Mediu (Docker Compose)
-
-### Load Balancer
-SPRING_RABBITMQ_HOST=rabbitmq
-SERVER_PORT=8080
-
-### Monitoring Replicas
-Monitoring Service 1:
-- MONITORING_QUEUE_NAME=monitoring_q_1
-
-Monitoring Service 2:
-- MONITORING_QUEUE_NAME=monitoring_q_2
-
-### Communication Service (AI)
-In clasa `AIService.java` sau variabile de mediu:
-- API_KEY=YOUR_GOOGLE_GEMINI_KEY
-
----
-
-## Testare Scenarii
-
-### Testare Load Balancing
-Se pot urmari log-urile pentru a vedea distributia:
-docker logs -f load-balancer
-docker logs -f monitoring-service-1
-docker logs -f monitoring-service-2
-
-Se va observa ca Load Balancer-ul alterneaza trimiterea mesajelor, iar replicile prelucreaza doar mesajele din cozile proprii.
-
-### Testare Chat
-1. Login ca User -> Scrie "Hello" (Raspuns regula).
-2. Scrie "What is energy?" (Raspuns AI Gemini).
-3. Login ca Admin (in Incognito) -> Selecteaza userul -> Scrie un raspuns manual.
-
----
-
-## Structura Cozi RabbitMQ
-
-- `device.measurements`: Coada de intrare de la simulator (consumata de LB).
-- `monitoring_q_1`: Coada dedicata Replicii 1.
-- `monitoring_q_2`: Coada dedicata Replicii 2.
-- `notification.queue`: Coada pentru alerte de supraconsum.
-- `sync.events`: Sincronizare date intre microservicii.
-
----
-
-## Concepte Implementate Tema 3
-
-- **Load Balancing Application-Level**
-- **WebSockets & STOMP Protocol**
-- **LLM Integration (Generative AI)**
-- **Distributed Queues Architecture**
-- **Scalabilitate Orizontala**
-- **Secure Token Propagation in Headers**
-
----
-
-## Oprire Sistem
-
-docker-compose down
+Real-Time Alerts: Simularea unui consum ridicat (peste limita dispozitivului) pentru a declanșa notificarea WebSocket în interfața clientului.
